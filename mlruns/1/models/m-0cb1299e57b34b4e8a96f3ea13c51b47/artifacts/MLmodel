@@ -1,0 +1,23 @@
+artifact_path: /workspaces/MLOps-Air_Quality_Prediction/mlruns/1/models/m-0cb1299e57b34b4e8a96f3ea13c51b47/artifacts
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.pkl
+    predict_fn: predict
+    python_version: 3.12.1
+  sklearn:
+    code: null
+    pickled_model: model.pkl
+    serialization_format: cloudpickle
+    sklearn_version: 1.8.0
+    skops_trusted_types: null
+mlflow_version: 3.11.1
+model_id: m-0cb1299e57b34b4e8a96f3ea13c51b47
+model_size_bytes: 5658841
+model_uuid: m-0cb1299e57b34b4e8a96f3ea13c51b47
+prompts: null
+run_id: 65213fdcdc79489ea99c4a67c0a71884
+utc_time_created: '2026-04-24 12:10:15.364461'
