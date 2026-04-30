@@ -12,22 +12,19 @@ from sklearn.metrics import (
     r2_score
 )
 
-
 # CONFIG
 DATA_PATH = "data/processed/processed_data.csv"
 MODEL_DIR = "models"
+MODEL_NAME = "AQI_Predictor"
 
 os.makedirs(MODEL_DIR, exist_ok=True)
-
 
 # LOAD DATA
 print("Loading processed dataset...")
 df = pd.read_csv(DATA_PATH)
-
 df = df.sort_values("datetime")
 
 print("Dataset shape:", df.shape)
-
 
 # FEATURES & TARGET
 feature_columns = [
@@ -47,7 +44,6 @@ feature_columns = [
 X = df[feature_columns]
 y = df["future_pm25"]
 
-
 # TIME SERIES SPLIT
 split_index = int(len(df) * 0.8)
 
@@ -60,12 +56,12 @@ y_test = y[split_index:]
 print(f"Train size: {len(X_train)}")
 print(f"Test size: {len(X_test)}")
 
-
-# MLFLOW
+# MLFLOW SETUP
 mlflow.set_experiment("Air_Quality_PM25_Prediction")
 
 experiments = [
     {"n_estimators": 50, "max_depth": 5},
+    {"n_estimators": 75, "max_depth": 7},
     {"n_estimators": 100, "max_depth": 10},
     {"n_estimators": 200, "max_depth": 15}
 ]
@@ -73,11 +69,13 @@ experiments = [
 best_model = None
 best_mae = float("inf")
 best_params = None
+best_run_id = None
 
+# TRAINING LOOP
 for params in experiments:
     print(f"\nRunning experiment: {params}")
 
-    with mlflow.start_run():
+    with mlflow.start_run() as run:
         model = RandomForestRegressor(
             n_estimators=params["n_estimators"],
             max_depth=params["max_depth"],
@@ -96,6 +94,7 @@ for params in experiments:
         print(f"RMSE: {rmse}")
         print(f"R2: {r2}")
 
+        # logging
         mlflow.log_param("n_estimators", params["n_estimators"])
         mlflow.log_param("max_depth", params["max_depth"])
 
@@ -105,14 +104,15 @@ for params in experiments:
 
         mlflow.sklearn.log_model(
             sk_model=model,
-            name="model"
+            artifact_path="model"
         )
 
+        # track best model
         if mae < best_mae:
             best_mae = mae
             best_model = model
             best_params = params
-
+            best_run_id = run.info.run_id
 
 # SAVE BEST MODEL
 joblib.dump(best_model, f"{MODEL_DIR}/best_model.pkl")
@@ -120,7 +120,7 @@ joblib.dump(best_model, f"{MODEL_DIR}/best_model.pkl")
 print("\nBEST MODEL SAVED")
 print("Best MAE:", best_mae)
 print("Best Params:", best_params)
-
+print("Best Run ID:", best_run_id)
 
 # FEATURE IMPORTANCE
 importance = pd.DataFrame({
@@ -146,3 +146,17 @@ plt.tight_layout()
 plt.savefig(f"{MODEL_DIR}/feature_importance.png")
 
 print("Feature importance saved.")
+
+# REGISTER MODEL
+print("\nRegistering best model to MLflow Model Registry...")
+
+model_uri = f"runs:/{best_run_id}/model"
+
+result = mlflow.register_model(
+    model_uri=model_uri,
+    name=MODEL_NAME
+)
+
+print("Model registered successfully!")
+print("Model Name:", result.name)
+print("Model Version:", result.version)
