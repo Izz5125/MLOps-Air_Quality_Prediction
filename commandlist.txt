@@ -1,0 +1,13 @@
+python src/ingest_data.py
+
+dvc add data/raw/air_quality.csv
+
+python src/preprocess.py
+
+dvc add data/processed/processed_data.csv
+
+python src/train.py
+
+python src/predict.py
+
+mlflow ui
