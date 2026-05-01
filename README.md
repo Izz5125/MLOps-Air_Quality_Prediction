@@ -7,7 +7,8 @@ This project aims to build a machine learning system to predict the daily Air Qu
 The system is designed following MLOps principles, enabling:
 - Continuous data ingestion from external APIs  
 - Automated data preprocessing  
-- Support for continual learning  
+- Model training and experiment tracking  
+- Model versioning and lifecycle management  
 - Scalable and reproducible pipeline  
 - Data versioning using DVC  
 
@@ -19,19 +20,22 @@ The system is designed following MLOps principles, enabling:
 project/
 │
 ├── data/
-│   ├── raw/          # Raw data (tracked by DVC)
-│   ├── processed/    # Cleaned dataset
+│   ├── raw/          
+│   ├── processed/    
 │
 ├── src/
 │   ├── ingest_data.py
 │   ├── preprocess.py
+│   ├── train.py
+│   ├── load_model.py
 │
 ├── models/
 ├── notebooks/
 ├── config/
 │
-├── .dvc/             # DVC configuration
-├── *.dvc             # Dataset metadata
+├── model_registry.yaml
+├── .dvc/             
+├── *.dvc             
 ```
 
 ---
@@ -55,6 +59,7 @@ Main dependencies:
 - Python 3.10  
 - Pandas  
 - Scikit-learn  
+- MLflow  
 - Requests  
 - DVC  
 
@@ -64,21 +69,16 @@ Main dependencies:
 
 ### 1. Data Ingestion
 
-Fetch latest data from API:
-
 ```bash
 python src/ingest_data.py
 ```
 
 Output:
 - Stored in `data/raw/`
-- File uses timestamp
 
 ---
 
 ### 2. Data Preprocessing
-
-Clean and prepare data:
 
 ```bash
 python src/preprocess.py
@@ -89,52 +89,72 @@ Output:
 
 ---
 
+## Model Training & Experiment Tracking
+
+Training is performed using multiple Random Forest configurations and tracked with MLflow.
+
+```bash
+python src/train.py
+```
+
+This step includes:
+- Training multiple experiments  
+- Logging parameters and metrics (MAE, RMSE, R²)  
+- Saving the best model  
+- Automatically registering the best model to MLflow Model Registry  
+
+---
+
+## Model Registry & Versioning (MLflow)
+
+The best model from each training process is registered in MLflow Model Registry.
+
+Example:
+- Version 1 → Staging  
+- Version 2 → Production  
+
+The Production model is the active model used for inference.
+
+---
+
+## Active Model for Inference
+
+The current model used for inference:
+
+- Model Name: AQI_Predictor  
+- Version: 2  
+- Stage: Production  
+
+Reason:
+This model has the best performance (lowest MAE) compared to other versions and has passed evaluation.
+
+---
+
+## Model Inference
+
+Run the following to use the Production model:
+
+```bash
+python src/load_model.py
+```
+
+This will:
+- Load the model from MLflow Model Registry  
+- Use the Production stage  
+- Perform prediction on new input data  
+
+---
+
 ## Data Versioning with DVC
 
-DVC is used to manage dataset versions without storing large files directly in Git.
+DVC is used to track dataset changes.
 
-### Initialize DVC
-
-```bash
-dvc init
-git add .
-git commit -m "Initialize DVC"
-```
-
----
-
-### Track Initial Dataset (v1)
+### Track Dataset
 
 ```bash
 dvc add data/raw/air_quality.csv
 git add data/raw/air_quality.csv.dvc
-git commit -m "Dataset v1"
-```
-
----
-
-### Simulate Continual Learning
-
-Fetch new data:
-
-```bash
-python src/ingest_data.py
-```
-
-Overwrite main dataset:
-
-```bash
-cp data/raw/<new_file>.csv data/raw/air_quality.csv
-```
-
----
-
-### Track Updated Dataset (v2)
-
-```bash
-dvc add data/raw/air_quality.csv
-git add data/raw/air_quality.csv.dvc
-git commit -m "Dataset v2"
+git commit -m "Update dataset"
 ```
 
 ---
@@ -145,14 +165,28 @@ git commit -m "Dataset v2"
 dvc diff HEAD~1 HEAD
 ```
 
-Example output:
+---
 
-```
-Modified:
-    data/raw/air_quality.csv
+## Model–Data Lineage
+
+The relationship between model and dataset is stored in:
+
+model_registry.yaml
+
+Example:
+
+```yaml
+model:
+  name: AQI_Predictor
+  version: 2
+  stage: Production
+  run_id: <run_id>
+  dataset_version: v3
 ```
 
-This indicates that the dataset content has changed.
+This ensures:
+- Model traceability to dataset version  
+- Reproducibility of the pipeline  
 
 ---
 
@@ -160,10 +194,12 @@ This indicates that the dataset content has changed.
 
 1. Fetch data from API  
 2. Store raw data  
-3. Update main dataset (`air_quality.csv`)  
-4. Track changes using DVC  
-5. Preprocess data  
-6. Prepare for model training  
+3. Version data using DVC  
+4. Preprocess data  
+5. Train model & track experiments (MLflow)  
+6. Register model (Model Registry)  
+7. Promote model to Production  
+8. Use model for inference  
 
 ---
 
@@ -171,9 +207,10 @@ This indicates that the dataset content has changed.
 
 - API-based dynamic data ingestion  
 - Dataset versioning with DVC  
-- Efficient handling of large data  
-- Reproducible data pipeline  
-- Support for continual learning  
+- Experiment tracking with MLflow  
+- Model versioning and registry  
+- Model lifecycle management (Staging → Production)  
+- Reproducible ML pipeline  
 
 ---
 
