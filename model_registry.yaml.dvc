@@ -1,0 +1,5 @@
+outs:
+- md5: 8c1bf98cbab0f00c77ab9dbda0764bd6
+  size: 126
+  hash: md5
+  path: model_registry.yaml
