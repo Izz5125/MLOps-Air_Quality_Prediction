@@ -3,16 +3,14 @@ import pandas as pd
 
 MODEL_NAME = "AQI_Predictor"
 
-print("Loading model from Production...")
+print("Loading model from Staging...")
 
-# load model dari stage Production
 model = mlflow.pyfunc.load_model(
-    model_uri=f"models:/{MODEL_NAME}/Production"
+    model_uri=f"models:/{MODEL_NAME}/Staging"
 )
 
 print("Model loaded successfully!")
 
-# DATA DUMMY (harus sesuai fitur)
 data = pd.DataFrame([{
     "pm1": 10,
     "pm25": 20,
@@ -30,7 +28,6 @@ data = pd.DataFrame([{
 print("\nInput data:")
 print(data)
 
-# PREDIKSI
 pred = model.predict(data)
 
 print("\nPrediction result:")

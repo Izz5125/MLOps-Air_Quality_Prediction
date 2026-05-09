@@ -4,3 +4,8 @@ scikit-learn
 matplotlib
 requests
 jupyter
+
+mlflow
+dvc
+pytest
+joblib

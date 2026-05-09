@@ -1,0 +1,54 @@
+name: MLOps Automation Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+jobs:
+
+  mlops-pipeline:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Create Models Directory
+        run: |
+          mkdir -p models
+
+      - name: Run Unit Tests
+        run: |
+          pytest tests/
+
+      - name: Run Preprocessing
+        run: |
+          python src/preprocess.py
+
+      - name: Run Training Pipeline
+        run: |
+          python src/train.py
+
+      - name: Run Evaluation
+        run: |
+          python src/evaluate.py
+
+      - name: Register Model to MLflow
+        run: |
+          python src/register_model.py
