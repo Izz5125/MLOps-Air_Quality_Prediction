@@ -51,7 +51,7 @@ def load_data():
     data_path = os.getenv('DATA_PATH', 'data/processed/processed_data.csv')
     if not os.path.exists(data_path):
         # Coba fallback paths
-        for p in ['processed_data.csv', './data/processed/processed_data.csv']:
+        for p in ['processed_data.csv', './data/processed/processed_data.csv', 'processed_data.csv']:
             if os.path.exists(p):
                 data_path = p
                 break
