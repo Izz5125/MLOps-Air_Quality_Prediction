@@ -370,13 +370,19 @@ async def get_latest_data():
         return {"error": f"Data not found at {DATA_PATH}", "prediction": None}
     
     df = pd.read_csv(DATA_PATH)
-    latest = df.iloc[-1:][FEATURE_COLUMNS]
+    latest_row = df.iloc[-1:]
+    latest_features = latest_row[FEATURE_COLUMNS]
     
-    result = {"latest_data": latest.to_dict('records')[0], "prediction": None}
+    # Ambil datetime untuk ditampilkan
+    latest_data_dict = latest_features.to_dict('records')[0]
+    if 'datetime' in df.columns:
+        latest_data_dict['datetime'] = str(latest_row['datetime'].values[0])
+    
+    result = {"latest_data": latest_data_dict, "prediction": None}
     
     if model is not None:
         try:
-            predicted_pm25 = make_prediction(latest)
+            predicted_pm25 = make_prediction(latest_features)
             predicted_aqi = pm25_to_aqi(predicted_pm25)
             result["prediction"] = {
                 "predicted_pm25": round(predicted_pm25, 2),
