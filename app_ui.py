@@ -4,6 +4,10 @@ import joblib
 import os
 from datetime import datetime, timezone, timedelta
 
+st.write("Files:", os.listdir())
+st.write("Models:", os.listdir("models") if os.path.exists("models") else "No models folder")
+st.write("Data:", os.listdir("data/processed") if os.path.exists("data/processed") else "No data folder")
+
 st.set_page_config(page_title="AQI Predictor - Malang", page_icon="🌫️", layout="wide")
 
 WIB = timezone(timedelta(hours=7))
@@ -33,6 +37,11 @@ def get_latest_data():
 @st.cache_resource
 def load_model():
     model_path = os.getenv('MODEL_PATH', 'models/best_model.pkl')
+    if not os.path.exists(model_path):
+        for p in ['best_model.pkl', './models/best_model.pkl']:
+            if os.path.exists(p):
+                model_path = p
+                break
     if os.path.exists(model_path):
         return joblib.load(model_path)
     return None
@@ -40,6 +49,12 @@ def load_model():
 @st.cache_data
 def load_data():
     data_path = os.getenv('DATA_PATH', 'data/processed/processed_data.csv')
+    if not os.path.exists(data_path):
+        # Coba fallback paths
+        for p in ['processed_data.csv', './data/processed/processed_data.csv']:
+            if os.path.exists(p):
+                data_path = p
+                break
     if os.path.exists(data_path):
         df = pd.read_csv(data_path)
         df['datetime'] = pd.to_datetime(df['datetime'], utc=True)
