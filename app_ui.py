@@ -4,10 +4,6 @@ import joblib
 import os
 from datetime import datetime, timezone, timedelta
 
-st.write("Files:", os.listdir())
-st.write("Models:", os.listdir("models") if os.path.exists("models") else "No models folder")
-st.write("Data:", os.listdir("data/processed") if os.path.exists("data/processed") else "No data folder")
-
 st.set_page_config(page_title="AQI Predictor - Malang", page_icon="🌫️", layout="wide")
 
 WIB = timezone(timedelta(hours=7))
