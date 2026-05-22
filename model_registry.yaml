@@ -1,0 +1,6 @@
+model:
+  name: AQI_Predictor
+  version: 2
+  stage: Production
+  run_id: 44c4e07699d44b148254a2bf5d458324
+  dataset_version: v3

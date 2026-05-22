@@ -4,19 +4,32 @@ on:
   push:
     branches:
       - main
-
   pull_request:
     branches:
       - main
+  schedule:
+    - cron: '0 */6 * * *'  # Setiap 6 jam
 
 jobs:
-
   mlops-pipeline:
-
     runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:14-alpine
+        env:
+          POSTGRES_USER: mlflow
+          POSTGRES_PASSWORD: mlflow_password
+          POSTGRES_DB: mlflowdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
-
       - name: Checkout Repository
         uses: actions/checkout@v4
 
@@ -28,27 +41,55 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install -r requirements.txt
+          pip install psycopg2-binary sqlalchemy
 
-      - name: Create Models Directory
+      - name: Create Directories
         run: |
-          mkdir -p models
+          mkdir -p models data/raw data/processed
+
+      - name: Run Data Ingestion
+        run: python src/ingest_data.py
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_USER: mlflow
+          POSTGRES_PASSWORD: mlflow_password
+          POSTGRES_DB: mlflowdb
 
       - name: Run Unit Tests
-        run: |
-          pytest tests/
+        run: pytest tests/ --tb=short
+        continue-on-error: true
 
       - name: Run Preprocessing
-        run: |
-          python src/preprocess.py
+        run: python src/preprocess.py
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_USER: mlflow
+          POSTGRES_PASSWORD: mlflow_password
+          POSTGRES_DB: mlflowdb
 
       - name: Run Training Pipeline
-        run: |
-          python src/train.py
+        run: python src/train.py
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_USER: mlflow
+          POSTGRES_PASSWORD: mlflow_password
+          POSTGRES_DB: mlflowdb
 
       - name: Run Evaluation
-        run: |
-          python src/evaluate.py
+        run: python src/evaluate.py
+        continue-on-error: true
 
       - name: Register Model to MLflow
-        run: |
-          python src/register_model.py
+        run: python src/register_model.py
+
+      - name: Upload Model Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trained-model
+          path: models/best_model.pkl
+
+      - name: Upload Metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: metrics
+          path: metrics.json

@@ -4,8 +4,12 @@ scikit-learn
 matplotlib
 requests
 jupyter
-
-mlflow
+mlflow>=2.8.0
 dvc
 pytest
 joblib
+psycopg2-binary
+sqlalchemy
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.5.0
