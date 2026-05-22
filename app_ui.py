@@ -1,40 +1,70 @@
 import streamlit as st
-import requests
 import pandas as pd
+import joblib
+import os
 from datetime import datetime, timezone, timedelta
 
 st.set_page_config(page_title="AQI Predictor - Malang", page_icon="🌫️", layout="wide")
 
 WIB = timezone(timedelta(hours=7))
 
-@st.cache_data(ttl=300)
 def get_latest_data():
-    try:
-        response = requests.get("http://localhost:8000/latest-data", timeout=5)
-        if response.status_code == 200:
-            return response.json()
-    except:
-        pass
+    model = load_model()
+    df = load_data()
+    if model is None or df is None:
+        return None
+    
+    latest = df.iloc[-1:]
+    features = ['pm1','pm25','relativehumidity','temperature','um003','hour','day','month','day_of_week','pm25_rolling','pm25_lag1']
+    pred_pm25 = model.predict(latest[features])[0]
+    pred_aqi = pm25_to_aqi(pred_pm25)
+    pred_cat, _ = get_aqi_info(pred_aqi)
+    
+    return {
+        "latest_data": latest.to_dict('records')[0],
+        "prediction": {
+            "predicted_pm25": float(pred_pm25),
+            "predicted_aqi": float(pred_aqi),
+            "aqi_category": pred_cat,
+            "recommendation": get_recommendation(pred_cat)
+        }
+    }
+
+@st.cache_resource
+def load_model():
+    model_path = os.getenv('MODEL_PATH', 'models/best_model.pkl')
+    if os.path.exists(model_path):
+        return joblib.load(model_path)
     return None
 
-@st.cache_data(ttl=3600)
-def get_health():
-    try:
-        response = requests.get("http://localhost:8000/health", timeout=5)
-        if response.status_code == 200:
-            return response.json()
-    except:
-        pass
+@st.cache_data
+def load_data():
+    data_path = os.getenv('DATA_PATH', 'data/processed/processed_data.csv')
+    if os.path.exists(data_path):
+        df = pd.read_csv(data_path)
+        df['datetime'] = pd.to_datetime(df['datetime'], utc=True)
+        return df
     return None
 
 def predict_manual(data):
-    try:
-        response = requests.post("http://localhost:8000/predict", json=data, timeout=5)
-        if response.status_code == 200:
-            return response.json()
-    except:
-        pass
-    return None
+    model = load_model()
+    if model is None:
+        return None
+    features = ['pm1','pm25','relativehumidity','temperature','um003','hour','day','month','day_of_week','pm25_rolling','pm25_lag1']
+    # Isi missing features
+    for f in ['hour','day','month','day_of_week','pm25_rolling','pm25_lag1']:
+        if f not in data:
+            data[f] = 0
+    df = pd.DataFrame([data])[features]
+    pred_pm25 = model.predict(df)[0]
+    pred_aqi = pm25_to_aqi(pred_pm25)
+    pred_cat, _ = get_aqi_info(pred_aqi)
+    return {
+        "predicted_pm25": float(pred_pm25),
+        "predicted_aqi": float(pred_aqi),
+        "aqi_category": pred_cat,
+        "recommendation": get_recommendation(pred_cat)
+    }
 
 def get_aqi_info(aqi):
     if aqi <= 50: return "Good", "🟢"
@@ -43,6 +73,18 @@ def get_aqi_info(aqi):
     elif aqi <= 200: return "Unhealthy", "🔴"
     elif aqi <= 300: return "Very Unhealthy", "🟣"
     else: return "Hazardous", "⚫"
+
+
+def get_recommendation(cat):
+    rec = {
+        "Good": "Udara sehat, aman beraktivitas di luar.",
+        "Moderate": "Udara cukup aman, kelompok sensitif kurangi aktivitas luar.",
+        "Unhealthy (Sensitive)": "Kelompok sensitif disarankan pakai masker.",
+        "Unhealthy": "Udara kurang sehat, disarankan pakai masker.",
+        "Very Unhealthy": "Udara sangat buruk, hindari aktivitas luar.",
+        "Hazardous": "Udara berbahaya! Jangan keluar rumah."
+    }
+    return rec.get(cat, "")
 
 def pm25_to_aqi(pm25):
     if pm25 <= 12: return (50/12)*pm25
@@ -55,11 +97,11 @@ def pm25_to_aqi(pm25):
 st.title("Air Quality Index Predictor - Malang")
 
 # Status bar
-health = get_health()
-if health and health.get("model_loaded"):
-    st.success("Sistem Aktif | Model: Production | MLflow: Terhubung")
+model = load_model()
+if model:
+    st.success("Sistem Aktif | Model: Production")
 else:
-    st.error("Sistem Offline - Jalankan `docker compose up -d`")
+    st.error("Model tidak ditemukan")
 
 st.divider()
 latest = get_latest_data()
