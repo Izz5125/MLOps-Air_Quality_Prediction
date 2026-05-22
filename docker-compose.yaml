@@ -1,0 +1,49 @@
+services:
+  aqi-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: aqi-api-service
+    ports:
+      - "8000:8000"
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow-server:5000
+      - MODEL_NAME=AQI_Predictor
+      - MODEL_STAGE=Staging
+      - DATA_PATH=/app/data/processed/processed_data.csv
+      - MODEL_PATH=/app/models/best_model.pkl
+    volumes:
+      - ./data:/app/data:ro
+      - ./models:/app/models
+    networks:
+      - aqi-network
+    depends_on:
+      mlflow-server:
+        condition: service_started
+    restart: unless-stopped
+
+  mlflow-server:
+    image: ghcr.io/mlflow/mlflow:v2.8.1
+    container_name: mlflow-server
+    ports:
+      - "5000:5000"
+    command: >
+      mlflow server
+      --backend-store-uri sqlite:///mlflow/mlflow.db
+      --default-artifact-root /mlflow/artifacts
+      --host 0.0.0.0
+      --port 5000
+    volumes:
+      - mlflow-data:/mlflow
+    networks:
+      - aqi-network
+    restart: unless-stopped
+
+networks:
+  aqi-network:
+    driver: bridge
+    name: aqi-network
+
+volumes:
+  mlflow-data:
+    name: aqi-mlflow-data
