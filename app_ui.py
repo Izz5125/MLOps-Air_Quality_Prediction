@@ -1,29 +1,16 @@
 import streamlit as st
 import requests
 import pandas as pd
-from datetime import datetime, timezone
-import time
+from datetime import datetime, timezone, timedelta
 
-st.set_page_config(
-    page_title="AQI Predictor - Malang",
-    page_icon="🌫️",
-    layout="wide"
-)
+st.set_page_config(page_title="AQI Predictor - Malang", page_icon="🌫️", layout="wide")
+
+WIB = timezone(timedelta(hours=7))
 
 @st.cache_data(ttl=300)
 def get_latest_data():
     try:
         response = requests.get("http://localhost:8000/latest-data", timeout=5)
-        if response.status_code == 200:
-            return response.json()
-    except:
-        pass
-    return None
-
-@st.cache_data(ttl=300)
-def get_model_info():
-    try:
-        response = requests.get("http://localhost:8000/model/info", timeout=5)
         if response.status_code == 200:
             return response.json()
     except:
@@ -49,242 +36,135 @@ def predict_manual(data):
         pass
     return None
 
-def time_ago(timestamp_str):
-    try:
-        if not timestamp_str:
-            return "tidak diketahui"
-        data_time = pd.to_datetime(timestamp_str)
-        now = pd.Timestamp.now(tz=data_time.tz)
-        diff = now - data_time
-        minutes = int(diff.total_seconds() / 60)
-        hours = minutes // 60
-        days = hours // 24
-        if minutes < 1:
-            return "baru saja"
-        elif minutes < 60:
-            return f"{minutes} menit yang lalu"
-        elif hours < 24:
-            return f"{hours} jam yang lalu"
-        else:
-            return f"{days} hari yang lalu"
-    except:
-        return "tidak diketahui"
+def get_aqi_info(aqi):
+    if aqi <= 50: return "Good", "🟢"
+    elif aqi <= 100: return "Moderate", "🟡"
+    elif aqi <= 150: return "Unhealthy (Sensitive)", "🟠"
+    elif aqi <= 200: return "Unhealthy", "🔴"
+    elif aqi <= 300: return "Very Unhealthy", "🟣"
+    else: return "Hazardous", "⚫"
 
-st.title("🌫️ Air Quality Index Predictor - Malang")
-st.markdown("Prediksi kualitas udara real-time menggunakan Machine Learning")
+def pm25_to_aqi(pm25):
+    if pm25 <= 12: return (50/12)*pm25
+    elif pm25 <= 35.4: return ((100-51)/(35.4-12.1))*(pm25-12.1)+51
+    elif pm25 <= 55.4: return ((150-101)/(55.4-35.5))*(pm25-35.5)+101
+    elif pm25 <= 150.4: return ((200-151)/(150.4-55.5))*(pm25-55.5)+151
+    elif pm25 <= 250.4: return ((300-201)/(250.4-150.5))*(pm25-150.5)+201
+    else: return 300
 
+st.title("Air Quality Index Predictor - Malang")
+
+# Status bar
 health = get_health()
-col_status1, col_status2, col_status3 = st.columns(3)
-
 if health and health.get("model_loaded"):
-    with col_status1:
-        st.success("🟢 API Aktif")
-    with col_status2:
-        st.success("🤖 Model Loaded")
-    with col_status3:
-        if health.get("mlflow_connected"):
-            st.success("📊 MLflow Terhubung")
-        else:
-            st.warning("📊 MLflow Offline")
+    st.success("Sistem Aktif | Model: Production | MLflow: Terhubung")
 else:
-    st.error("🔴 Sistem Offline - Jalankan docker compose up -d")
+    st.error("Sistem Offline - Jalankan `docker compose up -d`")
 
 st.divider()
-st.header("📡 Prediksi Kualitas Udara Saat Ini")
-
 latest = get_latest_data()
 
-if latest and "latest_data" in latest and latest["latest_data"]:
+# ============================================
+# ROW 1: DATA SAAT INI
+# ============================================
+if latest and "latest_data" in latest:
     data = latest["latest_data"]
-    pred = latest.get("prediction", {})
     
-    data_timestamp = data.get("datetime", None)
-    
-    time_col1, time_col2, time_col3 = st.columns(3)
-    
-    with time_col1:
-        if data_timestamp:
-            try:
-                data_time = pd.to_datetime(data_timestamp)
-                st.info(f"📅 Data Sensor: {data_time.strftime('%d %B %Y, %H:%M WIB')}")
-            except:
-                st.info(f"📅 Data Sensor: {data_timestamp}")
-        else:
-            st.warning("📅 Data Sensor: Tidak diketahui")
-    
-    with time_col2:
-        ago = time_ago(data_timestamp)
-        if "menit" in ago and int(ago.split()[0]) < 30:
-            st.success(f"⏱️ Update: {ago}")
-        elif "jam" in ago:
-            st.warning(f"⏱️ Update: {ago}")
-        else:
-            st.error(f"⏱️ Update: {ago}")
-    
-    with time_col3:
-        now = datetime.now().strftime("%d %B %Y, %H:%M WIB")
-        st.info(f"🕐 Sekarang: {now}")
-    
-    if "menit" in ago and int(ago.split()[0]) < 30:
-        st.success("✅ Data masih realtime (kurang dari 30 menit)")
-    elif "jam" in ago and int(ago.split()[0]) < 2:
-        st.warning(f"⚠️ Data cukup baru ({ago})")
+    data_time = data.get("datetime", None)
+    if data_time:
+        try:
+            dt_utc = pd.to_datetime(data_time)
+            if dt_utc.tz is None:
+                dt_utc = dt_utc.tz_localize('UTC')
+            dt_wib = dt_utc.tz_convert(WIB)
+            time_str = dt_wib.strftime('%d %B %Y, %H:%M WIB')
+        except:
+            time_str = str(data_time)
     else:
-        st.error(f"❌ Data sudah lama ({ago}). Perlu update data!")
-        st.info("💡 Jalankan: python src/ingest_data.py untuk update data")
+        time_str = "Tidak diketahui"
     
-    st.divider()
-    st.subheader("📊 Data Sensor Terkini")
+    current_pm25 = data.get('pm25', 0)
+    current_aqi = pm25_to_aqi(current_pm25)
+    current_cat, current_emoji = get_aqi_info(current_aqi)
     
-    cols = st.columns(5)
-    metrics_map = [
-        ("PM1.0", "pm1", "ug/m3"),
-        ("PM2.5", "pm25", "ug/m3"),
-        ("Humidity", "relativehumidity", "%"),
-        ("Temperature", "temperature", "C"),
-        ("Ultrafine", "um003", "particles/cm3"),
-    ]
+    st.subheader(f"Data Terbaru ({time_str})")
     
-    values = {}
-    for i, (label, key, unit) in enumerate(metrics_map):
-        val = data.get(key, "N/A")
-        values[key] = val
-        with cols[i]:
-            st.metric(f"{label}", f"{val:.1f}" if isinstance(val, (int, float)) else val)
-    
-    st.divider()
-    st.subheader("🔮 Hasil Prediksi AQI (1 Jam ke Depan)")
-    
-    if pred and "error" not in pred:
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.metric("PM2.5 Diprediksi", f"{pred['predicted_pm25']:.1f} ug/m3")
-        with col2:
-            aqi = pred['predicted_aqi']
-            st.metric("Indeks AQI", f"{aqi:.0f}")
-        with col3:
-            cat = pred['aqi_category']
-            emoji = {"Good": "🟢", "Moderate": "🟡", "Unhealthy for Sensitive Groups": "🟠", "Unhealthy": "🔴", "Very Unhealthy": "🟣", "Hazardous": "⚫"}
-            st.metric("Kategori", f"{emoji.get(cat, '❓')} {cat}")
-        
-        st.markdown("**Level AQI:**")
-        st.progress(min(aqi / 300, 1.0))
-        st.info(f"💡 Rekomendasi: {pred['recommendation']}")
-        
-        st.subheader("📈 Perbandingan PM2.5 Saat Ini vs Prediksi")
-        comp_col1, comp_col2 = st.columns(2)
-        
-        with comp_col1:
-            st.metric("PM2.5 Saat Ini", f"{values.get('pm25', 0):.1f} ug/m3")
-        with comp_col2:
-            delta = pred['predicted_pm25'] - values.get('pm25', 0)
-            st.metric("PM2.5 Prediksi (1 jam depan)", f"{pred['predicted_pm25']:.1f} ug/m3", 
-                     delta=f"{delta:+.1f} ug/m3", delta_color="inverse")
-        
-        if abs(delta) < 5:
-            st.success("✅ PM2.5 diprediksi stabil dalam 1 jam ke depan")
-        elif delta > 10:
-            st.error(f"⚠️ PM2.5 diprediksi naik signifikan (+{delta:.1f} ug/m3)")
-        elif delta < -10:
-            st.success(f"🟢 PM2.5 diprediksi turun signifikan ({delta:.1f} ug/m3)")
-    
-    elif pred and "error" in pred:
-        st.warning(f"⚠️ Prediksi gagal: {pred['error']}")
-    else:
-        st.warning("⚠️ Belum ada data prediksi")
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    with c1:
+        st.metric("PM2.5", f"{current_pm25:.1f} µg/m³")
+    with c2:
+        st.metric("PM1.0", f"{data.get('pm1', 0):.1f} µg/m³")
+    with c3:
+        st.metric("AQI", f"{current_aqi:.0f}", help=f"{current_emoji} {current_cat}")
+    with c4:
+        st.metric("Humidity", f"{data.get('relativehumidity', 0):.0f}%")
+    with c5:
+        st.metric("Temp", f"{data.get('temperature', 0):.1f}°C")
+    with c6:
+        st.metric("Status", f"{current_emoji} {current_cat}")
 
 else:
-    st.warning("⚠️ Tidak dapat mengambil data terbaru.")
-    st.info("💡 Pastikan API berjalan: docker compose up -d")
-    st.info("💡 Update data sensor: python src/ingest_data.py")
+    st.warning("Data tidak tersedia")
 
 st.divider()
 
-with st.expander("🔧 Prediksi Manual (Input Sendiri)", expanded=False):
-    col1, col2 = st.columns([1, 1])
+# ============================================
+# ROW 2: PREDIKSI
+# ============================================
+if latest and "prediction" in latest:
+    pred = latest["prediction"]
     
-    with col1:
-        st.subheader("📝 Input Data Sensor")
+    if "error" not in pred:
+        pred_pm25 = pred['predicted_pm25']
+        pred_aqi = pred['predicted_aqi']
+        pred_cat = pred['aqi_category']
         
-        with st.form("manual_form"):
-            sub1, sub2 = st.columns(2)
-            with sub1:
-                pm1 = st.number_input("PM1.0 (ug/m3)", 0.0, 500.0, 15.0, 0.1, key="m_pm1")
-                pm25 = st.number_input("PM2.5 (ug/m3)", 0.0, 500.0, 25.0, 0.1, key="m_pm25")
-                humidity = st.number_input("Humidity (%)", 0.0, 100.0, 65.0, 0.1, key="m_hum")
-            with sub2:
-                temp = st.number_input("Temperature (C)", 0.0, 50.0, 28.0, 0.1, key="m_temp")
-                um003 = st.number_input("Ultrafine Particles", 0.0, 5000.0, 500.0, 0.1, key="m_um003")
-                hour = st.number_input("Hour (0-23)", 0, 23, datetime.now().hour, key="m_hour")
-            
-            manual_submit = st.form_submit_button("🔮 Predict", use_container_width=True)
-    
-    with col2:
-        st.subheader("📊 Hasil Prediksi Manual")
+        emoji_map = {"Good": "🟢", "Moderate": "🟡", "Unhealthy for Sensitive Groups": "🟠", "Unhealthy": "🔴", "Very Unhealthy": "🟣", "Hazardous": "⚫"}
+        pred_emoji = emoji_map.get(pred_cat, "❓")
         
-        if manual_submit:
-            data = {
-                "pm1": pm1, "pm25": pm25,
-                "relativehumidity": humidity,
-                "temperature": temp, "um003": um003, "hour": hour
-            }
-            result = predict_manual(data)
-            
-            if result:
-                st.success("✅ Prediksi Berhasil!")
-                st.metric("PM2.5", f"{result['predicted_pm25']:.1f} ug/m3")
-                st.metric("AQI", f"{result['predicted_aqi']:.0f}")
-                st.metric("Kategori", result['aqi_category'])
-                st.info(f"💡 {result['recommendation']}")
-            else:
-                st.error("❌ Gagal memprediksi")
-        else:
-            st.info("👈 Isi data dan klik Predict")
-
-with st.sidebar:
-    st.header("📊 Informasi Model")
-    info = get_model_info()
-    if info:
-        st.success("✅ Model Terhubung")
-        st.write(f"Nama: {info.get('model_name', 'AQI_Predictor')}")
-        st.write(f"Stage: {info.get('current_stage', 'Production')}")
-        st.write(f"Source: {info.get('model_source', 'local')}")
-        st.write(f"Total Versi: {info.get('total_versions', 1)}")
-        if info.get('versions'):
-            with st.expander("📋 Detail Versi"):
-                for v in info['versions']:
-                    st.caption(f"v{v['version']}: {v['stage']} ({v['run_id'][:8]}...)")
+        st.subheader("Prediksi 1 Jam ke Depan")
+        
+        p1, p2, p3 = st.columns(3)
+        with p1:
+            delta = pred_pm25 - current_pm25 if latest else 0
+            st.metric("PM2.5", f"{pred_pm25:.1f} µg/m³", delta=f"{delta:+.1f}")
+        with p2:
+            st.metric("AQI", f"{pred_aqi:.0f}", help=f"{pred_emoji} {pred_cat}")
+        with p3:
+            st.metric("Kategori", f"{pred_emoji} {pred_cat}")
+        
+        st.info(f"{pred['recommendation']}")
     else:
-        st.error("❌ Tidak terhubung")
-    
-    st.divider()
-    
-    st.header("📖 Kategori AQI")
-    st.markdown('''
-    | AQI | Kategori | Emoji |
-    |-----|----------|-------|
-    | 0-50 | Good | 🟢 |
-    | 51-100 | Moderate | 🟡 |
-    | 101-150 | Sensitive | 🟠 |
-    | 151-200 | Unhealthy | 🔴 |
-    | 201-300 | Very Unhealthy | 🟣 |
-    | 300+ | Hazardous | ⚫ |
-    ''')
-    
-    st.divider()
-    
-    st.header("🔄 Update Data")
-    st.code("python src/ingest_data.py", language="bash")
-    
-    st.divider()
-    
-    st.header("🔗 Akses Cepat")
-    st.markdown('''
-    - [API Docs](http://localhost:8000/docs)
-    - [MLflow UI](http://localhost:5000)
-    - [GitHub](https://github.com/Izz5125/MLOps-Air_Quality_Prediction)
-    ''')
+        st.warning("Prediksi gagal")
+else:
+    st.warning("Prediksi tidak tersedia")
 
 st.divider()
-st.caption(f"🤖 MLOps Air Quality Prediction - Malang | © 2026 | Page loaded: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+# ============================================
+# ROW 3: INPUT MANUAL
+# ============================================
+with st.expander("Prediksi Manual", expanded=False):
+    with st.form("manual_form"):
+        c1, c2, c3, c4, c5 = st.columns(5)
+        with c1:
+            pm1 = st.number_input("PM1.0", 0.0, 500.0, 15.0)
+        with c2:
+            pm25 = st.number_input("PM2.5", 0.0, 500.0, 25.0)
+        with c3:
+            hum = st.number_input("Humidity %", 0.0, 100.0, 65.0)
+        with c4:
+            temp = st.number_input("Temp °C", 0.0, 50.0, 28.0)
+        with c5:
+            um = st.number_input("Ultrafine", 0.0, 5000.0, 500.0)
+        
+        if st.form_submit_button("Predict"):
+            result = predict_manual({"pm1": pm1, "pm25": pm25, "relativehumidity": hum, "temperature": temp, "um003": um})
+            if result:
+                st.success(f"PM2.5: {result['predicted_pm25']:.1f} | AQI: {result['predicted_aqi']:.0f} | {result['aqi_category']}")
+                st.info(result['recommendation'])
+            else:
+                st.error("Gagal memprediksi")
+
+st.divider()
+st.caption(f"MLOps Air Quality Prediction - Malang | {datetime.now(WIB).strftime('%Y-%m-%d %H:%M WIB')}")
