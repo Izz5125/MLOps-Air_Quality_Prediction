@@ -1,11 +1,9 @@
 name: MLOps Automation Pipeline
 
 on:
-  push:
-    branches:
-      - main
   schedule:
     - cron: '0 */6 * * *'
+  workflow_dispatch:
 
 jobs:
   mlops-pipeline:
@@ -30,12 +28,9 @@ jobs:
         run: |
           if [ -f processed_data.csv ]; then
             cp processed_data.csv data/processed/processed_data.csv
-            echo "✅ CSV restored"
-          else
-            echo "⚠️ No existing CSV"
           fi
 
-      - name: Run Data Ingestion (limited)
+      - name: Run Data Ingestion
         run: python src/ingest_data.py --max-pages 3
         continue-on-error: true
 
@@ -60,7 +55,11 @@ jobs:
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
           git add models/best_model.pkl processed_data.csv
-          git diff --staged --quiet || git commit -m "[automated] Update model & data"
-          git push
+          if git diff --staged --quiet; then
+            echo "No changes"
+          else
+            git commit -m "[automated] Update model & data"
+            git push
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
