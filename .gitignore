@@ -15,8 +15,6 @@ models/best_model.pkl
 models/feature_importance.*
 
 # Data files (pakai DVC)
-data/raw/*.csv
-data/processed/*.csv
 
 # Docker volumes
 mlflow-data/
