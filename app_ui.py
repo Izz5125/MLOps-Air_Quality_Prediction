@@ -172,7 +172,7 @@ if latest and "prediction" in latest:
         pred_aqi = pred['predicted_aqi']
         pred_cat = pred['aqi_category']
         
-        emoji_map = {"Good": "🟢", "Moderate": "🟡", "Unhealthy for Sensitive Groups": "🟠", "Unhealthy": "🔴", "Very Unhealthy": "🟣", "Hazardous": "⚫"}
+        emoji_map = {"Good": "🟢", "Moderate": "🟡", "Unhealthy for Sensitive Groups": "🟠", "Unhealthy (Sensitive)": "🟠", "Unhealthy": "🔴", "Very Unhealthy": "🟣", "Hazardous": "⚫"}
         pred_emoji = emoji_map.get(pred_cat, "❓")
         
         st.subheader("Prediksi 1 Jam ke Depan")
