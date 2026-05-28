@@ -3,32 +3,20 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
-    container_name: aqi-api-service
-    ports:
-      - "${API_PORT:-8000}:8000"
+    image: aqi-api:latest
     environment:
-      - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI:-http://mlflow-server:5000}
-      - MODEL_NAME=${MODEL_NAME:-AQI_Predictor}
-      - MODEL_STAGE=${MODEL_STAGE:-Staging}
-      - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
-      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
-      - POSTGRES_USER=${POSTGRES_USER:-mlflow}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-mlflow_password}
-      - POSTGRES_DB=${POSTGRES_DB:-mlflowdb}
+      - MODEL_NAME=AQI_Predictor
+      - MODEL_STAGE=Production
+      - MLFLOW_TRACKING_URI=http://mlflow-server:5000
     volumes:
       - ./data:/app/data
       - ./models:/app/models
+      - ./mlruns:/app/mlruns
     networks:
       - aqi-network
-    depends_on:
-      postgres:
-        condition: service_healthy
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+    deploy:
+      replicas: 3
 
   mlflow-server:
     image: ghcr.io/mlflow/mlflow:v2.19.0
@@ -43,37 +31,14 @@ services:
       --port 5000
     volumes:
       - mlflow-data:/mlflow
+      - ./mlruns:/mlflow/mlruns
     networks:
       - aqi-network
-    restart: unless-stopped
-
-  postgres:
-    image: postgres:14-alpine
-    container_name: aqi-postgres
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
-    environment:
-      - POSTGRES_USER=${POSTGRES_USER:-mlflow}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-mlflow_password}
-      - POSTGRES_DB=${POSTGRES_DB:-mlflowdb}
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    networks:
-      - aqi-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mlflow}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
     restart: unless-stopped
 
 networks:
   aqi-network:
     driver: bridge
-    name: aqi-network
 
 volumes:
   mlflow-data:
-    name: aqi-mlflow-data
-  postgres-data:
-    name: aqi-postgres-data

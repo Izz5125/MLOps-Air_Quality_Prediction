@@ -12,6 +12,7 @@ The system is designed following MLOps principles, enabling:
 - Scalable and reproducible pipeline
 - Data versioning using DVC
 - Containerized services with Docker Compose orchestration
+- Horizontal scaling with Docker Compose replicas
 
 
 ## Project Structure
@@ -50,13 +51,17 @@ MLOps-Air_Quality_Prediction/
 |   +-- test_aqi.py
 |
 +-- api_service.py
++-- app_ui.py
 +-- Dockerfile.api
 +-- docker-compose.yaml
 |
 +-- model_registry.yaml
 +-- model_registry.yaml.dvc
 +-- requirements.txt
-+-- commandlist.txt
+|
++-- .github/
+|   +-- workflows/
+|       +-- mlops-pipeline.yml
 |
 +-- .dvc/
 +-- README.md
@@ -97,9 +102,7 @@ Main dependencies:
 python src/ingest_data.py
 ```
 
-Output:
-- Stored in `data/raw/air_quality.csv`
-
+Output: Stored in ```data/raw/air_quality.csv```
 
 ### 2. Data Preprocessing
 
@@ -107,8 +110,7 @@ Output:
 python src/preprocess.py
 ```
 
-Output:
-- `data/processed/processed_data.csv`
+Output: ```data/processed/processed_data.csv```
 
 
 ## Model Training & Experiment Tracking
@@ -134,9 +136,10 @@ The best model from each training process is registered in MLflow Model Registry
 python src/register_model.py
 ```
 
-Example:
-- Version 1 → Staging
-- Version 2 → Production
+Model lifecycle:
+- New model -> Staging
+- If better than Production -> Auto-promote to Production
+- If not better -> Kept in Staging
 
 The Production model is the active model used for inference.
 
@@ -145,11 +148,12 @@ The Production model is the active model used for inference.
 
 The current model used for inference:
 
-- Model Name: `AQI_Predictor`
-- Version: `2`
-- Stage: `Production`
+- Model Name: ```AQI_Predictor```
+- Version: ```1```
+- Stage: ```Production```
+- MAE: 6.7158
 
-Reason: This model has the best performance (lowest MAE) compared to other versions and has passed evaluation.
+Reason: This model has the best performance (lowest MAE) compared to other versions.
 
 
 ## Model Inference
@@ -160,15 +164,18 @@ Reason: This model has the best performance (lowest MAE) compared to other versi
 python src/load_model.py
 ```
 
-This will:
-- Load the model from MLflow Model Registry
-- Use the Production stage
-- Perform prediction on new input data
-
 ### Using Prediction Script
 
 ```bash
 python src/predict.py
+```
+
+### Using REST API
+
+```bash
+curl -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"pm1":15,"pm25":25,"relativehumidity":65,"temperature":28,"um003":500}'
 ```
 
 
@@ -176,37 +183,23 @@ python src/predict.py
 
 DVC is used to track dataset changes.
 
-### Track Dataset
-
 ```bash
 dvc add data/raw/air_quality.csv
 git add data/raw/air_quality.csv.dvc
 git commit -m "Update dataset"
 ```
 
-### Compare Dataset Versions
-
-```bash
-dvc diff HEAD~1 HEAD
-```
-
 
 ## Model-Data Lineage
-
-The relationship between model and dataset is stored in `model_registry.yaml`:
 
 ```yaml
 model:
   name: AQI_Predictor
-  version: 2
+  version: 1
   stage: Production
-  run_id: 44c4e07699d44b148254a2bf5d458324
+  run_id: ab082927
   dataset_version: v3
 ```
-
-This ensures:
-- Model traceability to dataset version
-- Reproducibility of the pipeline
 
 
 ## Docker Compose Orchestration
@@ -214,38 +207,78 @@ This ensures:
 ### Architecture
 
 ```
-+--------------------------------------------------+
-|           Docker Network (aqi-network)            |
-|                                                  |
-|  +------------------+   +------------------+      |
-|  |   API Service    |   |  MLflow Server   |      |
-|  |   (FastAPI)      +---+  (Tracking)      |      |
-|  |   Port: 8000     |   |  Port: 5000      |      |
-|  +--------+---------+   +--------+---------+      |
-|           |                      |                |
-|           v                      v                |
-|  +------------------+   +------------------+      |
-|  |  Model Artifacts |   |  SQLite Database |      |
-|  |  (Volume Mount)  |   |  (Volume: mlflow)|      |
-|  +------------------+   +------------------+      |
-+--------------------------------------------------+
++-----------------------------------------------+
+|         Docker Network (aqi-network)          |
+|                                               |
+|  +------------------+   +------------------+  |
+|  |   API Service    |   |  MLflow Server   |  |
+|  |   (FastAPI)      +---+  (Tracking)      |  |
+|  |   Port: 8000     |   |  Port: 5000      |  |
+|  +------------------+   +------------------+  |
+|                                               |
+|  +------------------+   +------------------+  |
+|  |   API Replica 2  |   |   API Replica 3  |  |
+|  |   (FastAPI)      |   |   (FastAPI)      |  |
+|  +------------------+   +------------------+  |
+|                                               |
+|  +------------------+   +------------------+  |
+|  |  Model Artifacts |   |  MLflow Volume   |  |
+|  +------------------+   +------------------+  |
++-----------------------------------------------+
 ```
 
 ### Services
 
-| Service       | Container Name    | Port | Description                     |
-|---------------|------------------|------|---------------------------------|
-| API Service   | aqi-api-service  | 8000 | REST API for AQI inference      |
-| MLflow Server | mlflow-server    | 5000 | Tracking & model registry       |
+| Service       | Container Name | Port | Description                    |
+|---------------|---------------|------|---------------------------------|
+| API Service   | aqi-api-N     | 8000 | REST API (3 replicas)           |
+| MLflow Server | mlflow-server | 5000 | Tracking & model registry       |
 
 
 ### Quick Start
 
 ```bash
-docker compose up -d
+docker compose up -d --scale aqi-api=3
 docker compose ps
 docker compose logs -f
 docker compose down
+```
+
+
+## Horizontal Scaling
+
+### Run 3 API replicas
+
+```bash
+docker compose up -d --scale aqi-api=3
+```
+
+### Check replicas
+
+```bash
+docker ps --filter "name=aqi-api"
+```
+
+### Scale up dynamically
+
+```bash
+docker compose up -d --scale aqi-api=5
+```
+
+### Scale down
+
+```bash
+docker compose up -d --scale aqi-api=2
+```
+
+### Verify scaling
+
+```bash
+docker ps --filter "name=aqi-api" --format "table {{.Names}}\t{{.Status}}"
+docker exec mlops-air_quality_prediction-aqi-api-1 curl -s http://localhost:8000/health
+docker exec mlops-air_quality_prediction-aqi-api-1 curl -s -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"pm1":15,"pm25":25,"relativehumidity":65,"temperature":28,"um003":500}'
 ```
 
 
@@ -270,6 +303,16 @@ docker compose down
 curl http://localhost:8000/health
 ```
 
+Response:
+```json
+{
+    "status": "healthy",
+    "model_loaded": true,
+    "mlflow_connected": true,
+    "timestamp": "2026-05-28T15:53:31"
+}
+```
+
 ### Single Prediction
 
 ```bash
@@ -278,57 +321,66 @@ curl -X POST http://localhost:8000/predict \
   -d '{"pm1":15.0,"pm25":25.0,"relativehumidity":65.0,"temperature":28.0,"um003":500.0}'
 ```
 
-### Batch Prediction
-
-```bash
-curl -X POST http://localhost:8000/predict/batch \
-  -H "Content-Type: application/json" \
-  -d '{
-    "data": [
-      {"pm1":10.0,"pm25":20.0,"relativehumidity":60.0,"temperature":26.0,"um003":400.0},
-      {"pm1":35.0,"pm25":45.0,"relativehumidity":80.0,"temperature":30.0,"um003":800.0}
-    ]
-  }'
+Response:
+```json
+{
+    "predicted_pm25": 21.93,
+    "predicted_aqi": 71.67,
+    "aqi_category": "Moderate",
+    "recommendation": "Kualitas udara cukup aman, tetapi kelompok sensitif disarankan mengurangi aktivitas luar ruangan yang terlalu lama."
+}
 ```
 
 
 ## MLflow UI
 
-Open in browser:
+Open in browser: ```http://localhost:5000```
 
-```
-http://localhost:5000
-```
+
+## GitHub Actions CI/CD
+
+Automated pipeline runs every 6 hours:
+1. Data ingestion from OpenAQ API
+2. Preprocessing
+3. Training & evaluation
+4. Model registration (auto-promote if better)
+5. Commit updated model & data
+
+Manual trigger: Via GitHub Actions tab -> Run workflow
 
 
 ## Data Pipeline Workflow
 
-1. Fetch data from OpenAQ API  
-2. Store raw data  
-3. Version data using DVC  
-4. Preprocess data  
-5. Train model & track experiments (MLflow)  
-6. Register model (Model Registry)  
-7. Promote model to Production  
-8. Deploy as API service  
-9. Perform inference via REST API  
+1. Fetch data from OpenAQ API
+2. Store raw data
+3. Version data using DVC
+4. Preprocess data
+5. Train model & track experiments (MLflow)
+6. Register model (Model Registry)
+7. Auto-promote to Production if better
+8. Deploy as API service with 3 replicas
+9. Perform inference via REST API
 
 
 ## Key Features
 
-- API-based dynamic data ingestion  
-- Dataset versioning with DVC  
-- Experiment tracking with MLflow  
-- Model versioning and registry  
-- Model lifecycle management (Staging → Production)  
-- Reproducible ML pipeline  
-- Containerized API service with Docker  
-- Multi-service orchestration with Docker Compose  
-- Persistent storage with Docker volumes  
-- Health monitoring  
+- API-based dynamic data ingestion
+- Dataset versioning with DVC
+- Experiment tracking with MLflow
+- Model versioning and registry
+- Model lifecycle management (Staging -> Production)
+- Auto-promote model based on performance
+- Reproducible ML pipeline
+- Containerized API service with Docker
+- Multi-service orchestration with Docker Compose
+- Horizontal scaling with replicas
+- Persistent storage with Docker volumes
+- Health monitoring
+- CI/CD with GitHub Actions
+- Streamlit UI for public access
 
 
 ## Author
 
-Faiz Habibina Umiyabi  
-Informatics Engineering - Universitas Brawijaya
+**Faiz Habibina Umiyabi**  
+235150200111045
