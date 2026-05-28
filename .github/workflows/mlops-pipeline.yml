@@ -24,10 +24,10 @@ jobs:
       - name: Create Directories
         run: mkdir -p models data/raw data/processed
 
-      - name: Restore CSV from repo
+      - name: Restore data from repo
         run: |
-          if [ -f processed_data.csv ]; then
-            cp processed_data.csv data/processed/processed_data.csv
+          if [ -f data/processed/processed_data.csv ]; then
+            echo "✅ Data exists"
           fi
 
       - name: Run Data Ingestion
@@ -47,14 +47,11 @@ jobs:
       - name: Register Model
         run: python src/register_model.py
 
-      - name: Copy CSV to root
-        run: cp data/processed/processed_data.csv processed_data.csv
-
-      - name: Commit & Push
+      - name: Commit & Push changes
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
-          git add models/best_model.pkl processed_data.csv
+          git add models/best_model.pkl data/processed/processed_data.csv data/raw/air_quality.csv
           if git diff --staged --quiet; then
             echo "No changes"
           else
