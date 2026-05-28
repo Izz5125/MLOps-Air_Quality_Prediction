@@ -42,7 +42,7 @@ def load_model():
         return joblib.load(model_path)
     return None
 
-@st.cache_data
+@st.cache_data(ttl=300)
 def load_data():
     data_path = os.getenv('DATA_PATH', 'data/processed/processed_data.csv')
     if not os.path.exists(data_path):
@@ -56,6 +56,9 @@ def load_data():
         df['datetime'] = pd.to_datetime(df['datetime'], utc=True)
         return df
     return None
+
+# Clear cache on startup
+st.cache_data.clear()
 
 def predict_manual(data):
     model = load_model()
