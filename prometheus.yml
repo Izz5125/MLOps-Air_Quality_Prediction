@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'aqi-api'
+    static_configs:
+      - targets:
+          - 'mlops-air_quality_prediction-aqi-api-1:8000'
+          - 'mlops-air_quality_prediction-aqi-api-2:8000'
+          - 'mlops-air_quality_prediction-aqi-api-3:8000'
+    metrics_path: '/metrics'
+
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

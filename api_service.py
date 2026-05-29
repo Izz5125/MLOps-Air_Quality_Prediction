@@ -5,6 +5,9 @@ Terintegrasi dengan MLflow untuk model tracking
 """
 
 from fastapi import FastAPI, HTTPException
+from prometheus_client import Counter, Histogram, Gauge, generate_latest
+import time
+import os
 from pydantic import BaseModel, Field
 import pandas as pd
 import joblib
@@ -63,6 +66,13 @@ except ImportError as e:
         return recommendations.get(aqi_status, "Tidak ada rekomendasi tersedia.")
 
 # Konfigurasi
+# Prometheus Metrics
+PREDICTION_COUNT = Counter('aqi_predictions_total', 'Total predictions')
+PREDICTION_LATENCY = Histogram('aqi_prediction_latency_seconds', 'Prediction latency')
+REQUEST_COUNT = Counter('aqi_requests_total', 'Total requests', ['endpoint'])
+PREDICTION_SCORE = Gauge('aqi_predicted_score', 'Predicted AQI score')
+MODEL_STATUS = Gauge('aqi_model_loaded', 'Model loaded status')
+
 app = FastAPI(
     title="AQI Prediction API",
     description="API untuk prediksi Air Quality Index (AQI)",
@@ -276,6 +286,8 @@ async def health_check():
 
 @app.post("/predict", response_model=PredictionResponse)
 async def predict_single(data: SensorData):
+    REQUEST_COUNT.labels(endpoint='/predict').inc()
+    start_time = time.time()
     """Predict AQI for single sensor data"""
     if model is None:
         raise HTTPException(status_code=503, detail="Model not loaded. Train model first.")
@@ -286,6 +298,11 @@ async def predict_single(data: SensorData):
         predicted_aqi = pm25_to_aqi(predicted_pm25)
         aqi_category = classify_aqi(predicted_aqi)
         recommendation = get_recommendation(aqi_category)
+        
+        PREDICTION_COUNT.inc()
+        PREDICTION_LATENCY.observe(time.time() - start_time)
+        PREDICTION_SCORE.set(predicted_aqi)
+        MODEL_STATUS.set(1)
         
         return PredictionResponse(
             predicted_pm25=round(predicted_pm25, 2),
@@ -395,6 +412,11 @@ async def get_latest_data():
     
     return result
 
+
+@app.get("/metrics")
+async def metrics():
+    from fastapi.responses import PlainTextResponse
+    return PlainTextResponse(content=generate_latest(), media_type="text/plain")
 
 if __name__ == "__main__":
     import uvicorn
