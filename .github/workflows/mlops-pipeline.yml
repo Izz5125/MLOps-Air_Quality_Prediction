@@ -46,6 +46,8 @@ jobs:
 
       - name: Run Training
         run: python src/train.py
+        env:
+          MLFLOW_ALLOW_FILE_STORE: true
 
       - name: Run Evaluation
         run: python src/evaluate.py
@@ -53,6 +55,8 @@ jobs:
 
       - name: Register Model
         run: python src/register_model.py
+        env:
+          MLFLOW_ALLOW_FILE_STORE: true
 
       - name: Commit & Push changes
         run: |
