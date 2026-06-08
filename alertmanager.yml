@@ -1,0 +1,13 @@
+global: {}
+route:
+  receiver: 'github-webhook'
+receivers:
+  - name: 'github-webhook'
+    webhook_configs:
+      - url: 'https://api.github.com/repos/Izz5125/MLOps-Air_Quality_Prediction/dispatches'
+        send_resolved: false
+        http_config:
+          authorization:
+            credentials: 'token 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'
+          headers:
+            Accept: application/vnd.github+json

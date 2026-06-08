@@ -72,6 +72,7 @@ PREDICTION_LATENCY = Histogram('aqi_prediction_latency_seconds', 'Prediction lat
 REQUEST_COUNT = Counter('aqi_requests_total', 'Total requests', ['endpoint'])
 PREDICTION_SCORE = Gauge('aqi_predicted_score', 'Predicted AQI score')
 MODEL_STATUS = Gauge('aqi_model_loaded', 'Model loaded status')
+INPUT_PM25_AVG = Gauge('aqi_input_pm25_avg', 'Average PM2.5 input over last requests')
 
 app = FastAPI(
     title="AQI Prediction API",

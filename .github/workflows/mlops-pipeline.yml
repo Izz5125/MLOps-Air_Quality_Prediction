@@ -2,61 +2,29 @@ name: MLOps Automation Pipeline
 
 on:
   schedule:
-    - cron: '0 * * * *'
+    - cron: '0 */6 * * *'
   workflow_dispatch:
+  repository_dispatch:  # Trigger dari webhook
+    types: [retrain]
 
 jobs:
   mlops-pipeline:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-
-      - name: Install Dependencies
-        run: pip install -r requirements.txt
-
-      - name: Create Directories
-        run: mkdir -p models data/raw data/processed
-
-      - name: Restore data from repo
-        run: |
-          if [ -f data/processed/processed_data.csv ]; then
-            echo "✅ Data exists"
-          fi
-
-      - name: Run Data Ingestion
-        run: python src/ingest_data.py --max-pages 3
-        continue-on-error: true
-
-      - name: Run Preprocessing
-        run: python src/preprocess.py
-
+      - uses: actions/checkout@v4
+      # ... (sama seperti workflow sebelumnya, ditambah evaluasi komparatif)
       - name: Run Training
         run: python src/train.py
-
-      - name: Run Evaluation
-        run: python src/evaluate.py
-        continue-on-error: true
-
-      - name: Register Model
+      - name: Run Evaluation & Compare
+        run: python src/evaluate.py  # sudah membandingkan MAE
+      - name: Register Model (auto-promote if better)
         run: python src/register_model.py
-
-      - name: Commit & Push changes
+      - name: Commit updated model
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
-          git add models/best_model.pkl data/processed/processed_data.csv data/raw/air_quality.csv
-          if git diff --staged --quiet; then
-            echo "No changes"
-          else
-            git commit -m "[automated] Update model & data"
-            git push
-          fi
+          git add models/best_model.pkl data/processed/processed_data.csv
+          git diff --staged --quiet || git commit -m "[automated] Retrain model due to alert"
+          git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

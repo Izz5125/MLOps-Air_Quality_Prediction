@@ -1,0 +1,5 @@
+curl -X POST \
+  -H "Authorization: token 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" \
+  -H "Accept: application/vnd.github+json" \
+  https://api.github.com/repos/Izz5125/MLOps-Air_Quality_Prediction/dispatches \
+  -d '{"event_type":"retrain"}'

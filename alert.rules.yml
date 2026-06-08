@@ -1,0 +1,20 @@
+groups:
+  - name: aqi_alerts
+    interval: 30s
+    rules:
+      - alert: HighPM25Input
+        expr: aqi_input_pm25_avg > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Rata-rata PM2.5 input tinggi ({{ $value }})"
+          description: "Data drift terdeteksi, PM2.5 input di atas 100 µg/m³ selama 5 menit."
+      - alert: ModelNotLoaded
+        expr: aqi_model_loaded == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Model tidak loaded!"
+          description: "Model AQI Predictor tidak tersedia."
