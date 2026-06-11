@@ -304,6 +304,7 @@ async def predict_single(data: SensorData):
         PREDICTION_LATENCY.observe(time.time() - start_time)
         PREDICTION_SCORE.set(predicted_aqi)
         MODEL_STATUS.set(1)
+        INPUT_PM25_AVG.set(data.pm25)
         
         return PredictionResponse(
             predicted_pm25=round(predicted_pm25, 2),
