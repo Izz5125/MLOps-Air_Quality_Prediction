@@ -1,319 +1,136 @@
-# MLOps Air Quality Prediction - Malang
+# MLOps Air Quality Prediction — Malang
 
-## Project Overview
+Comprehensive documentation for building, training, and serving an Air Quality Index (AQI) prediction pipeline for Malang using PM2.5 sensor data. This repository implements an MLOps workflow: data ingestion → preprocessing → training → model registration → serving.
 
-This project aims to build a machine learning system to predict the daily Air Quality Index (AQI) in Malang using real-time air quality sensor data (PM2.5).
+## Contents
+- Project overview and goals
+- Developer Quick Start (local + Docker)
+- Data pipeline and model lifecycle
+- MLflow & Model Registry integration
+- DVC data versioning
+- API usage examples and test instructions
+- Deployment and operations runbook (extended documentation in /docs)
 
-The system is designed following MLOps principles, enabling:
-- Continuous data ingestion from external APIs
-- Automated data preprocessing
-- Model training and experiment tracking
-- Model versioning and lifecycle management
-- Scalable and reproducible pipeline
-- Data versioning using DVC
-- Containerized services with Docker Compose orchestration
-- Horizontal scaling with Docker Compose replicas
+## Project Goals
+- Provide reproducible pipelines for AQI prediction using PM2.5 and auxiliary sensors
+- Track experiments and metrics using MLflow
+- Version datasets with DVC and track model lineage
+- Provide a production-ready API (FastAPI) with containerized deployment (Docker Compose)
 
+## Key Features
+- Data ingestion from OpenAQ (PM2.5)
+- Automated preprocessing and feature engineering
+- Training with experiment tracking (MAE, RMSE, R2)
+- Automatic model registration to MLflow Model Registry
+- Simple REST API for single and batch inference
+- Docker Compose orchestration for API and MLflow
 
-## Project Structure
+## Repository layout (important files)
+- data/: raw and processed datasets
+- src/: core scripts
+  - src/ingest_data.py — ingest raw data
+  - src/preprocess.py — preprocessing pipeline
+  - src/train.py — training & MLflow logging
+  - src/register_model.py — model registration logic
+  - src/predict.py — prediction utilities
+  - src/load_model.py — load model helper
+- models/: saved artifacts and feature importance
+- notebooks/: exploratory analysis
+- api_service.py — FastAPI application entrypoint
+- docker-compose.yaml — orchestration (API, MLflow)
+- requirements.txt — Python dependencies
 
-```
-MLOps-Air_Quality_Prediction/
-|
-+-- data/
-|   +-- raw/
-|   |   +-- air_quality.csv
-|   |   +-- air_quality.csv.dvc
-|   +-- processed/
-|       +-- processed_data.csv
-|       +-- processed_data.csv.dvc
-|
-+-- src/
-|   +-- aqi.py
-|   +-- ingest_data.py
-|   +-- preprocess.py
-|   +-- train.py
-|   +-- evaluate.py
-|   +-- predict.py
-|   +-- load_model.py
-|   +-- register_model.py
-|
-+-- models/
-|   +-- best_model.pkl
-|   +-- feature_importance.csv
-|   +-- feature_importance.png
-|
-+-- notebooks/
-|   +-- 01_initial_data_exploration.ipynb
-|
-+-- config/
-+-- tests/
-|   +-- test_aqi.py
-|
-+-- api_service.py
-+-- app_ui.py
-+-- Dockerfile.api
-+-- docker-compose.yaml
-|
-+-- model_registry.yaml
-+-- model_registry.yaml.dvc
-+-- requirements.txt
-|
-+-- .github/
-|   +-- workflows/
-|       +-- mlops-pipeline.yml
-|
-+-- .dvc/
-+-- README.md
+## Requirements
+- Python 3.10+ (venv recommended)
+- Docker & Docker Compose (for containerized dev/ops)
+- DVC for data versioning
+- See `requirements.txt` for exact Python packages: [requirements.txt](requirements.txt)
+
+## Quick Start — Local (developer)
+1) Create virtual environment and install dependencies:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-
-## Data Source
-
-Data is collected from the OpenAQ API.
-
-- Parameter: PM2.5
-- Format: JSON
-- Update frequency: ~1 hour
-- Data type: Time-series
-
-
-## Development Environment
-
-This project uses GitHub Codespaces.
-
-Main dependencies:
-- Python 3.10+
-- Pandas
-- Scikit-learn
-- MLflow
-- FastAPI
-- Uvicorn
-- Requests
-- DVC
-- Docker & Docker Compose
-
-
-## Running the Data Pipeline
-
-### 1. Data Ingestion
+2) Ingest raw data (writes to `data/raw/air_quality.csv`):
 
 ```bash
 python src/ingest_data.py
 ```
 
-Output: Stored in ```data/raw/air_quality.csv```
-
-### 2. Data Preprocessing
+3) Preprocess data (writes to `data/processed/processed_data.csv`):
 
 ```bash
 python src/preprocess.py
 ```
 
-Output: ```data/processed/processed_data.csv```
-
-
-## Model Training & Experiment Tracking
-
-Training is performed using multiple Random Forest configurations and tracked with MLflow.
+4) Train models and log experiments to MLflow (local MLflow required or use Docker Compose):
 
 ```bash
 python src/train.py
 ```
 
-This step includes:
-- Training multiple experiments
-- Logging parameters and metrics (MAE, RMSE, R2)
-- Saving the best model
-- Automatically registering the best model to MLflow Model Registry
-
-
-## Model Registry & Versioning (MLflow)
-
-The best model from each training process is registered in MLflow Model Registry.
+5) Run the API locally (development):
 
 ```bash
-python src/register_model.py
+python api_service.py
+# then open http://localhost:8000/docs for Swagger UI
 ```
 
-Model lifecycle:
-- New model -> Staging
-- If better than Production -> Auto-promote to Production
-- If not better -> Kept in Staging
-
-The Production model is the active model used for inference.
-
-
-## Active Model for Inference
-
-The current model used for inference:
-
-- Model Name: ```AQI_Predictor```
-- Version: ```1```
-- Stage: ```Production```
-- MAE: 6.7158
-
-Reason: This model has the best performance (lowest MAE) compared to other versions.
-
-
-## Model Inference
-
-### Using Python Script
+## Quick Start — Docker Compose (recommended for reproducibility)
+1) Start services (API + MLflow by default):
 
 ```bash
-python src/load_model.py
+docker compose up -d --scale aqi-api=3
 ```
 
-### Using Prediction Script
+2) View logs:
 
 ```bash
-python src/predict.py
+docker compose logs -f
 ```
 
-### Using REST API
+3) Tear down:
 
 ```bash
-curl -X POST http://localhost:8000/predict \
-  -H "Content-Type: application/json" \
-  -d '{"pm1":15,"pm25":25,"relativehumidity":65,"temperature":28,"um003":500}'
+docker compose down
 ```
 
+## Data pipeline
+- Ingest: `src/ingest_data.py` pulls PM2.5 data from OpenAQ and stores raw CSV in `data/raw/`.
+- Preprocess: `src/preprocess.py` cleans, imputes missing values, encodes features, and writes processed CSV to `data/processed/`.
+- Training: `src/train.py` runs experiments (random forest variations), logs parameters/metrics to MLflow, and saves the best model locally under `mlruns/` and `models/`.
+- Registration: `src/register_model.py` registers the best model to MLflow Model Registry and optionally promotes it to `Production` if metrics improve.
 
-## Data Versioning with DVC
+## MLflow & Model Registry
+- MLflow tracks experiments (MAE, RMSE, R2). Configure tracking URI in environment or `docker-compose.yaml` when using the containerized MLflow server.
+- Model registration flow:
+  1. Training script logs model and metrics
+  2. Registration script promotes best model to Model Registry
+  3. Promotion policy: if new model MAE < production MAE → promote to `Production`
 
-DVC is used to track dataset changes.
+## DVC (data versioning)
+- Use DVC to version large datasets and track dataset changes.
+  - Example:
 
 ```bash
 dvc add data/raw/air_quality.csv
 git add data/raw/air_quality.csv.dvc
-git commit -m "Update dataset"
+git commit -m "Add raw air quality data"
 ```
 
+- Configure a remote (S3/GCS) in `.dvc/config` for team workflows.
 
-## Model-Data Lineage
+## API Usage
+- `GET /health` — health & readiness
+- `POST /predict` — single prediction (JSON payload)
+- `POST /predict/batch` — batch predictions (array payload)
+- `GET /model/info` — active model metadata
 
-```yaml
-model:
-  name: AQI_Predictor
-  version: 1
-  stage: Production
-  run_id: ab082927
-  dataset_version: v3
-```
-
-
-## Docker Compose Orchestration
-
-### Architecture
-
-```
-+-----------------------------------------------+
-|         Docker Network (aqi-network)          |
-|                                               |
-|  +------------------+   +------------------+  |
-|  |   API Service    |   |  MLflow Server   |  |
-|  |   (FastAPI)      +---+  (Tracking)      |  |
-|  |   Port: 8000     |   |  Port: 5000      |  |
-|  +------------------+   +------------------+  |
-|                                               |
-|  +------------------+   +------------------+  |
-|  |   API Replica 2  |   |   API Replica 3  |  |
-|  |   (FastAPI)      |   |   (FastAPI)      |  |
-|  +------------------+   +------------------+  |
-|                                               |
-|  +------------------+   +------------------+  |
-|  |  Model Artifacts |   |  MLflow Volume   |  |
-|  +------------------+   +------------------+  |
-+-----------------------------------------------+
-```
-
-### Services
-
-| Service       | Container Name | Port | Description                    |
-|---------------|---------------|------|---------------------------------|
-| API Service   | aqi-api-N     | 8000 | REST API (3 replicas)           |
-| MLflow Server | mlflow-server | 5000 | Tracking & model registry       |
-
-
-### Quick Start
-
-```bash
-docker compose up -d --scale aqi-api=3
-docker compose ps
-docker compose logs -f
-docker compose down
-```
-
-
-## Horizontal Scaling
-
-### Run 3 API replicas
-
-```bash
-docker compose up -d --scale aqi-api=3
-```
-
-### Check replicas
-
-```bash
-docker ps --filter "name=aqi-api"
-```
-
-### Scale up dynamically
-
-```bash
-docker compose up -d --scale aqi-api=5
-```
-
-### Scale down
-
-```bash
-docker compose up -d --scale aqi-api=2
-```
-
-### Verify scaling
-
-```bash
-docker ps --filter "name=aqi-api" --format "table {{.Names}}\t{{.Status}}"
-docker exec mlops-air_quality_prediction-aqi-api-1 curl -s http://localhost:8000/health
-docker exec mlops-air_quality_prediction-aqi-api-1 curl -s -X POST http://localhost:8000/predict \
-  -H "Content-Type: application/json" \
-  -d '{"pm1":15,"pm25":25,"relativehumidity":65,"temperature":28,"um003":500}'
-```
-
-
-## API Endpoints
-
-| Method | Endpoint       | Description                     |
-|--------|----------------|---------------------------------|
-| GET    | /              | Root endpoint                   |
-| GET    | /health        | Health check                    |
-| POST   | /predict       | Single prediction               |
-| POST   | /predict/batch | Batch prediction                |
-| GET    | /model/info    | Model info                      |
-| GET    | /latest-data   | Latest data                     |
-| GET    | /docs          | Swagger documentation           |
-
-
-## Testing the API
-
-### Health Check
-
-```bash
-curl http://localhost:8000/health
-```
-
-Response:
-```json
-{
-    "status": "healthy",
-    "model_loaded": true,
-    "mlflow_connected": true,
-    "timestamp": "2026-05-28T15:53:31"
-}
-```
-
-### Single Prediction
+## Single prediction example (curl):
 
 ```bash
 curl -X POST http://localhost:8000/predict \
@@ -321,66 +138,44 @@ curl -X POST http://localhost:8000/predict \
   -d '{"pm1":15.0,"pm25":25.0,"relativehumidity":65.0,"temperature":28.0,"um003":500.0}'
 ```
 
-Response:
+## Expected response example:
+
 ```json
 {
-    "predicted_pm25": 21.93,
-    "predicted_aqi": 71.67,
-    "aqi_category": "Moderate",
-    "recommendation": "Kualitas udara cukup aman, tetapi kelompok sensitif disarankan mengurangi aktivitas luar ruangan yang terlalu lama."
+  "predicted_pm25": 21.93,
+  "predicted_aqi": 71.67,
+  "aqi_category": "Moderate",
+  "recommendation": "Udara cukup aman, kelompok sensitif kurangi aktivitas luar."
 }
 ```
 
+## Testing
+- Unit tests: `tests/test_aqi.py`.
+- Run tests:
 
-## MLflow UI
+```bash
+pytest -q
+```
 
-Open in browser: ```http://localhost:5000```
+## CI / CD
+- A GitHub Actions workflow is included in `.github/workflows/` (pipeline triggers, ingestion, training, registration).
+- Typical CI steps: lint → unit tests → build container (optional) → run pipeline steps (ingest/test/train) → register model (on success).
 
+## Deployment & Operations
+- For production deployments, use the `docker-compose.yaml` or convert to Kubernetes manifests.
+- Persist MLflow artifacts via a mounted volume or remote storage.
+- Ensure DVC remote is configured and accessible to CI/CD for data reproducibility.
 
-## GitHub Actions CI/CD
+## Troubleshooting & Notes
+- If MLflow cannot be reached, ensure its service port (default 5000) is available and `MLFLOW_TRACKING_URI` is set.
+- If model fails to load, check `mlruns/` and `models/` for saved artifacts and matching `mlflow.pyfunc` versions.
 
-Automated pipeline runs every 6 hours:
-1. Data ingestion from OpenAQ API
-2. Preprocessing
-3. Training & evaluation
-4. Model registration (auto-promote if better)
-5. Commit updated model & data
-
-Manual trigger: Via GitHub Actions tab -> Run workflow
-
-
-## Data Pipeline Workflow
-
-1. Fetch data from OpenAQ API
-2. Store raw data
-3. Version data using DVC
-4. Preprocess data
-5. Train model & track experiments (MLflow)
-6. Register model (Model Registry)
-7. Auto-promote to Production if better
-8. Deploy as API service with 3 replicas
-9. Perform inference via REST API
+## License
+- See `LICENSE` at the project root.
 
 
-## Key Features
-
-- API-based dynamic data ingestion
-- Dataset versioning with DVC
-- Experiment tracking with MLflow
-- Model versioning and registry
-- Model lifecycle management (Staging -> Production)
-- Auto-promote model based on performance
-- Reproducible ML pipeline
-- Containerized API service with Docker
-- Multi-service orchestration with Docker Compose
-- Horizontal scaling with replicas
-- Persistent storage with Docker volumes
-- Health monitoring
-- CI/CD with GitHub Actions
-- Streamlit UI for public access
-
+More detailed operational runbook and deployment instructions are available in `/docs/DEPLOYMENT.md`.
 
 ## Author
-
 **Faiz Habibina Umiyabi**  
 235150200111045
